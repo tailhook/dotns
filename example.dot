@@ -1,0 +1,147 @@
+digraph topology {
+    node [style=rounded shape=box]
+    subgraph cluster_DC1 {
+
+        // Frontends
+
+        subgraph cluster_felicia {
+            felicia_1
+            felicia_2
+
+            label="felicia [frontend]"
+        }
+
+        subgraph cluster_florence {
+            florence_1
+            florence_2
+
+            label="florence [frontend]"
+        }
+
+        // Load Balancers
+
+        subgraph cluster_gina {
+            gina_input [shape="record" label="{<ext> | input | <int>}"]
+            gina_output [shape="record" label="{<ext> | output | <int>}"]
+
+            label="gina [gateway]"
+        }
+
+        subgraph cluster_laura {
+            laura_device [shape="record" label="{<in> | device | <out>}"]
+            label="laura [load balancer]"
+        }
+        subgraph cluster_lisa {
+            lisa_device [shape="record" label="{<in> | device | <out>}"]
+            label="lisa [load balancer]"
+        }
+
+        // frontends/gateways to load balancer connections
+
+        gina_input:int -> laura_device:in [minlen=2]
+        gina_input:int -> lisa_device:in [minlen=2]
+        {felicia_1 felicia_2 florence_1 florence_2} -> laura_device:in [minlen=2]
+        {felicia_1 felicia_2 florence_1 florence_2} -> lisa_device:in [minlen=2]
+        laura_device:out -> gina_output:int [style=dashed]
+        lisa_device:out -> gina_output:int [style=dashed]
+
+        // Workers
+
+        subgraph cluster_wally {
+            edge [minlen=1]
+            wally_lb [shape="record" label="{<in> | balancer | <out>}"]
+            wally_1 [label="1"]
+            wally_2 [label="2"]
+            wally_lb:out -> {wally_1 wally_2}
+
+            label="wally [worker]"
+        }
+
+        subgraph cluster_wilson {
+            wilson_1 [label="1"]
+            wilson_2 [label="2"]
+
+            label="wilson [worker]"
+        }
+
+        subgraph cluster_warren { warren; label="warren [worker]" }
+        subgraph cluster_wayne { wayne; label="wayne [worker]" }
+        subgraph cluster_wilfred { wilfred; label="wilfred [worker]" }
+        subgraph cluster_willy { willy; label="willy [worker]" }
+
+        // Worker connections
+
+        laura_device:out -> {wally_lb:in warren wayne}
+        lisa_device:out -> {wilson_1 wilson_2 wilfred willy}
+
+
+        label="Data Center 1"
+        style=dotted
+    }
+    subgraph cluster_DC2 {
+
+        subgraph cluster_faith {
+            faith_1
+            faith_2
+
+            label="faith [frontend]"
+        }
+
+        subgraph cluster_gloria {
+            gloria_input [shape="record" label="{<ext> | input | <int>}"]
+            gloria_output [shape="record" label="{<ext> | output | <int>}"]
+            label="gloria [gateway]"
+        }
+
+        subgraph cluster_lora {
+            lora_device [shape="record" label="{<in> | device | <out>}"]
+            label="lora [load balancer]"
+        }
+
+        gloria_input:int -> lora_device:in
+        {faith_1 faith_2} -> lora_device:in
+        lora_device:out -> gloria_output:int [style=dashed]
+
+        subgraph cluster_winnie { winnie; label="winnie [worker]" }
+        subgraph cluster_winston { winston; label="winston [worker]" }
+
+        lora_device:out -> {winnie winston}
+
+        label="Data Center 2"
+        style=dotted
+    }
+
+    // Cross data-center connections
+    gloria_output:ext -> gina_input:ext [minlen=0 penwidth=4]
+    gina_output:ext -> gloria_input:ext [minlen=0 penwidth=4]
+
+
+    // Legend hack
+    subgraph cluster_legend {
+        key [shape=plaintext
+            label=<<table border="0" cellpadding="2" cellspacing="0" cellborder="0">
+            <tr><td align="right" port="i1">priority 1</td></tr>
+            <tr><td align="right" port="i2">priority 2</td></tr>
+            <tr><td align="right" port="i3">cross data center</td></tr>
+            </table>>]
+        key2 [shape=plaintext
+            label=<<table border="0" cellpadding="2" cellspacing="0" cellborder="0">
+            <tr><td port="i1">&nbsp;</td></tr>
+            <tr><td port="i2">&nbsp;</td></tr>
+            <tr><td port="i3">&nbsp;</td></tr>
+            </table>>]
+        key:i1:e -> key2:i1:w [minlen=2]
+        key:i2:e -> key2:i2:w [style=dashed minlen=2]
+        key:i3:e -> key2:i3:w [penwidth=4 minlen=2]
+
+        dc [label="Data Center" style=dotted]
+        box [label="Box" style=""]
+        process [label="Process" style=rounded]
+
+        dc -> box -> process [style=invis minlen=1]
+
+        label="Legend"
+    }
+
+    rankdir=LR
+}
