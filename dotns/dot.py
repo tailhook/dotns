@@ -37,6 +37,10 @@ class Edge(object):
 class GraphBase(object):
 
     def add_node(self, name):
+        if name == 'node':
+            return Node('__node__')  # TODO make fake node
+        if name == 'edge':
+            return Node('__edge__')  # TODO make fake node
         if not name in self.nodes:
             self.nodes[name] = Node(name)
         return self.nodes[name]
@@ -47,6 +51,24 @@ class GraphBase(object):
     def add_edge(self, edge):
         self.edges.add(edge)
 
+    @property
+    def all_nodes(self):
+        yield from self.nodes.values()
+        for sub in self.subgraphs:
+            if sub.name.endswith('_legend'):
+                continue
+            yield from sub.all_nodes
+
+    @property
+    def all_subgraphs(self):
+        for sub in self.subgraphs:
+            yield sub
+            yield from sub.all_subgraphs
+
+    def add_subgraph(self, g):
+        self.subgraphs.append(g)
+
+
 
 class Subgraph(GraphBase):
 
@@ -56,6 +78,7 @@ class Subgraph(GraphBase):
         self.nodes = {}
         self.prop = {}
         self.edges = []
+        self.subgraphs = []
 
 
 class AnonymousSubgraph(object):
@@ -268,6 +291,7 @@ class Parser(object):
                     self._assert_token('delim', '{')
                     g1 = Subgraph(name, g)
                     self._parse_graph_body(g1)
+                    g.add_subgraph(g1)
                     continue
             elif tname == 'delim':
                 if tvalue == '}':

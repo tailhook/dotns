@@ -9,6 +9,7 @@ digraph topology {
             felicia_2
 
             label="felicia [frontend]"
+            ip="127.1.5.1"
         }
 
         subgraph cluster_florence {
@@ -16,6 +17,7 @@ digraph topology {
             florence_2
 
             label="florence [frontend]"
+            ip="127.1.5.2"
         }
 
         // Load Balancers
@@ -25,15 +27,18 @@ digraph topology {
             gina_output [shape="record" label="{<ext> | output | <int>}"]
 
             label="gina [gateway]"
+            ip="127.1.6.1"
         }
 
         subgraph cluster_laura {
             laura_device [shape="record" label="{<in> | device | <out>}"]
             label="laura [load balancer]"
+            ip="127.1.11.1"
         }
         subgraph cluster_lisa {
             lisa_device [shape="record" label="{<in> | device | <out>}"]
             label="lisa [load balancer]"
+            ip="127.1.11.2"
         }
 
         // frontends/gateways to load balancer connections
@@ -55,6 +60,7 @@ digraph topology {
             wally_lb:out -> {wally_1 wally_2}
 
             label="wally [worker]"
+            ip="127.1.22.1"
         }
 
         subgraph cluster_wilson {
@@ -62,12 +68,13 @@ digraph topology {
             wilson_2 [label="2"]
 
             label="wilson [worker]"
+            ip="127.1.22.2"
         }
 
-        subgraph cluster_warren { warren; label="warren [worker]" }
-        subgraph cluster_wayne { wayne; label="wayne [worker]" }
-        subgraph cluster_wilfred { wilfred; label="wilfred [worker]" }
-        subgraph cluster_willy { willy; label="willy [worker]" }
+        subgraph cluster_warren { warren; label="warren [worker]"; ip="127.1.22.3" }
+        subgraph cluster_wayne { wayne; label="wayne [worker]"; ip="127.1.22.4" }
+        subgraph cluster_wilfred { wilfred; label="wilfred [worker]"; ip="127.1.22.4" }
+        subgraph cluster_willy { willy; label="willy [worker]"; ip="127.1.22.4" }
 
         // Worker connections
 
@@ -85,25 +92,28 @@ digraph topology {
             faith_2
 
             label="faith [frontend]"
+            ip="127.2.5.1"
         }
 
         subgraph cluster_gloria {
             gloria_input [shape="record" label="{<ext> | input | <int>}"]
             gloria_output [shape="record" label="{<ext> | output | <int>}"]
             label="gloria [gateway]"
+            ip="127.2.6.1"
         }
 
         subgraph cluster_lora {
             lora_device [shape="record" label="{<in> | device | <out>}"]
             label="lora [load balancer]"
+            ip="127.2.11.1"
         }
 
         gloria_input:int -> lora_device:in
         {faith_1 faith_2} -> lora_device:in
         lora_device:out -> gloria_output:int [style=dashed]
 
-        subgraph cluster_winnie { winnie; label="winnie [worker]" }
-        subgraph cluster_winston { winston; label="winston [worker]" }
+        subgraph cluster_winnie { winnie; label="winnie [worker]"; ip="127.2.22.1" }
+        subgraph cluster_winston { winston; label="winston [worker]"; ip="127.2.22.2" }
 
         lora_device:out -> {winnie winston}
 
@@ -141,6 +151,7 @@ digraph topology {
         dc -> box -> process [style=invis minlen=1]
 
         label="Legend"
+        annotation=true
     }
 
     rankdir=LR
