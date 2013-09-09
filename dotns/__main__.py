@@ -13,8 +13,10 @@ TOPOLOGIES = {}
 def serve_request(req, verbose=False):
     if verbose:
         print("dotns: Got request:", repr(req))
-    _req, host, appname, topology = req.decode('ascii').split()
-    assert _req == 'REQUEST'
+    _req, host, appname, _topology = req.decode('ascii').split()
+    assert _req == 'REQUEST', _req
+    assert _topology.startswith('topology://'), _topology
+    topology = _topology[len('topology://'):]
     result = list(TOPOLOGIES[topology].resolve(host, appname))
     if verbose:
         print("dotns: Result:", ';'.join(result))
@@ -51,17 +53,17 @@ def main():
     TOPOLOGIES[tname] = topology.Topology(graph)
 
     if options.print_hosts:
-        for h in TOPOLOGIES[tname].hosts:
+        for h in TOPOLOGIES[tname].hosts.keys():
             print(h)
     elif options.print_apps:
-        for p in TOPOLOGIES[tname].processes:
+        for p in TOPOLOGIES[tname].processes.keys():
             print(p)
     elif options.print_host_app_pairs:
         for h, a in TOPOLOGIES[tname].pairs:
             print(h, a)
     else:
         nanomsg.reply_service(options.bind,
-            partial(serve_request, verbose=False))
+            partial(serve_request, verbose=options.verbose))
 
 
 if __name__ == '__main__':

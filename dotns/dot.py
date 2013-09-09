@@ -60,6 +60,14 @@ class GraphBase(object):
             yield from sub.all_nodes
 
     @property
+    def all_edges(self):
+        yield from self.edges
+        for sub in self.subgraphs:
+            if sub.name.endswith('_legend'):
+                continue
+            yield from sub.all_edges
+
+    @property
     def all_subgraphs(self):
         for sub in self.subgraphs:
             yield sub

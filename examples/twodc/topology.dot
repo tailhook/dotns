@@ -81,10 +81,10 @@ digraph topology {
         laura_device:out -> {wally_lb:in warren wayne}
         lisa_device:out -> {wilson_1 wilson_2 wilfred willy}
 
-
         label="Data Center 1"
         style=dotted
     }
+
     subgraph cluster_DC2 {
 
         subgraph cluster_faith {
@@ -125,6 +125,15 @@ digraph topology {
     gloria_output:ext -> gina_input:ext [minlen=0 penwidth=4]
     gina_output:ext -> gloria_input:ext [minlen=0 penwidth=4]
 
+
+    // Finally or imaginary clients
+
+    subgraph cluster_client {
+        client
+        external=yes
+    }
+
+    client -> {felicia_1 felicia_2 florence_1 florence_2 faith_1 faith_2}
 
     // Legend hack
     subgraph cluster_legend {
