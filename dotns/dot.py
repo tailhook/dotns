@@ -1,5 +1,6 @@
 import re
 import ast
+from itertools import product
 
 
 TOKEN_RE = re.compile(r"""
@@ -30,6 +31,7 @@ class Edge(object):
     def __init__(self, start, end):
         self.start = start
         self.end = end
+        self.prop = {}
 
 
 class GraphBase(object):
@@ -42,6 +44,9 @@ class GraphBase(object):
     def set_node_properties(self, name, props):
         self.add_node(name).prop.update(props)
 
+    def add_edge(self, edge):
+        self.edges.add(edge)
+
 
 class Subgraph(GraphBase):
 
@@ -50,11 +55,13 @@ class Subgraph(GraphBase):
         self.parent = parent
         self.nodes = {}
         self.prop = {}
+        self.edges = []
 
 
 class AnonymousSubgraph(object):
 
-    def __init__(self):
+    def __init__(self, parent):
+        self.parent = parent
         self.nodes = set()
         self.prop = {}
 
@@ -69,6 +76,7 @@ class Digraph(GraphBase):
         self.edges = []
         self.nodes = {}
         self.subgraphs = []
+        self.prop = {}
 
 
 class Parser(object):
@@ -99,7 +107,7 @@ class Parser(object):
                 break
         start = self._pos
         self._pos = i + 1
-        yield 'angled', self._data[start:self._pos]
+        yield 'anglebracket', self._data[start:self._pos]
 
     def _retoken(self):
         while True:
@@ -143,15 +151,12 @@ class Parser(object):
     def _assert_token(self, tname, tvalue=None):
         name, value = next(self._tokeniter)
         if name != tname:
-            raise ValueError("Unexpected token {!r}".format(tvalue))
-        elif tvalue is not None and (isinstance(tvalue, tuple) and
-            value not in tvalue or tvalue != value):
+            raise ValueError("Unexpected token {!r}".format(value))
+        elif tvalue is not None and (value not in tvalue
+            if isinstance(tvalue, tuple) else tvalue != value):
             raise ValueError("Expected {!r} but {!r} found"
                 .format(tvalue, value))
         return value
-
-    def _parse_arrow(self, tvalue, subvalue):
-        pass
 
     def _parse_value(self):
         valuetype, value = next(self._tokeniter)
@@ -165,9 +170,45 @@ class Parser(object):
             raise ValueError("Unexpected {!r}".format(value[:16]))
         return value
 
-    def _parse_edges(self, node, edge_type):
-        if edge_type == '--':
-            self.e = Edge()
+    def _parse_edges(self, start, edge_type):
+        while True:
+            etype, evalue = next(self._tokeniter)
+            if etype == 'name':
+                end = evalue
+            elif etype == 'delim' and evalue == '{':
+                end = AnonymousSubgraph(None)
+                self._parse_graph_body(end)
+            else:
+                raise ValueError("Unexpected {!r}".format(evalue))
+            if isinstance(start, AnonymousSubgraph):
+                if isinstance(end, AnonymousSubgraph):
+                    edges = [Edge(a, b)
+                        for a, b in product(start.nodes, end.nodes)]
+                else:
+                    edges = [Edge(a, end) for a in start.nodes]
+            else:
+                if isinstance(end, AnonymousSubgraph):
+                    edges = [Edge(start, b) for b in end.nodes]
+                else:
+                    edges = [Edge(start, end)]
+            yield from edges
+            ttype, tvalue = next(self._tokeniter)
+            if ttype == 'delim':
+                if tvalue == '[':
+                    prop = self._parse_properties()
+                    for e in edges:
+                        e.prop.update(prop)
+                    tvalue = self._assert_token('delim', ('\n', ';', '}'))
+                    return tvalue
+                elif tvalue in ('\n', ';', '}'):
+                    return tvalue
+                else:
+                    raise ValueError("Unexpected {!r}".format(tvalue))
+            elif ttype == 'arrow':
+                start = end
+                continue
+            else:
+                raise ValueError("Unexpected {!r}".format(tvalue))
 
 
     def _parse_properties(self):
@@ -179,6 +220,8 @@ class Parser(object):
                     return result
                 elif name == ',':
                     continue  # comma allowed, just skip it
+                elif name == '\n':
+                    continue  # newlines here treated as whitespace
                 else:
                     raise ValueError("Unexpected {!r}".format(name))
             if nametype != 'name':
@@ -192,20 +235,13 @@ class Parser(object):
             if tname == 'name':
                 subname, subvalue = next(self._tokeniter)
                 if subname == 'delim':
-                    if subvalue == '\n':
+                    if subvalue in ('\n', ';'):
                         g.add_node(tvalue)
                     elif subvalue == '=':
                         g.prop[tvalue] = self._parse_value()
-                        etype, evalue = next(self._tokeniter)
-                        if etype != 'delim':
-                            raise ValueError("Unexpected {!r}".format(evalue))
-                        if evalue == '}':
-                            break
-                        if evalue not in ('\n', ';'):
-                            raise ValueError("Unexpected {!r}".format(evalue))
-                    elif subvalue == '{':
-                        g1 = AnonymousSubgraph(g)
-                        self._parse_graph_body(g1)
+                        etoken = self._assert_token('delim', ('\n', ';', '}'))
+                        if etoken == '}':
+                            break;
                     elif subvalue == '[':
                         props = self._parse_properties()
                         g.set_node_properties(tvalue, props)
@@ -213,7 +249,15 @@ class Parser(object):
                         raise ValueError("Unexpected {!r}".format(subvalue))
                     continue
                 elif subname == 'name':
-                    raise NotImplementedError()
+                    g.add_node(tvalue)
+                    while subname == 'name':
+                        g.add_node(subvalue)
+                        subname, subvalue = next(self._tokeniter)
+                    if subname != 'delim' or subvalue not in ('\n', ';', '}'):
+                        raise ValueError("Unexpected {!r}".format(subvalue))
+                    if subvalue == '}':
+                        break
+                    continue
                 elif subname == 'arrow':
                     for edge in self._parse_edges(tvalue, subvalue):
                         g.edges.append(edge)
@@ -228,7 +272,24 @@ class Parser(object):
             elif tname == 'delim':
                 if tvalue == '}':
                     break
-                elif tvalue == '\n':
+                elif tvalue == '{':
+                    g1 = AnonymousSubgraph(g)
+                    self._parse_graph_body(g1)
+                    nname, nvalue = next(self._tokeniter)
+                    if nname == 'delim':
+                        if nvalue == '\n':
+                            continue
+                        else:
+                            raise ValueError(
+                                "Unexpected {!r}".format(nvalue))
+                    elif nname == 'arrow':
+                        for edge in self._parse_edges(g1, tvalue):
+                            g.edges.append(edge)
+                        continue
+                    else:
+                        raise ValueError(
+                            "Unexpected {!r}".format(nvalue))
+                elif tvalue in ('\n', ';'):
                     continue
             raise ValueError("Unexpected {!r}".format(tvalue))
 
