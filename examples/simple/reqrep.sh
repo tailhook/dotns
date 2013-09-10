@@ -9,7 +9,7 @@ export NN_NAME_SERVICE=ipc://./run/name_service
 
 echo "Running reqrep topology with pid $$"
 
-python -m dotns --dot-file examples/simple/topology.dot --bind $NN_NAME_SERVICE --verbose &
+python3 -m dotns --dot-file examples/simple/topology.dot --bind $NN_NAME_SERVICE --verbose &
 sleep 1
 
 echo starting

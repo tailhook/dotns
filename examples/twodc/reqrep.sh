@@ -11,7 +11,7 @@ echo "Running reqrep topology with pid $$"
 
 mkdir run > /dev/null
 
-python -m dotns --dot-file examples/twodc/topology.dot --bind $NN_NAME_SERVICE  --verbose &
+python3 -m dotns --dot-file examples/twodc/topology.dot --bind $NN_NAME_SERVICE  --verbose &
 sleep 1
 
 NN_OVERRIDE_HOSTNAME=felicia  NN_APPLICATION_NAME=frontend_2 nanodev --reqrep --topology topology &
@@ -61,4 +61,4 @@ mknod ./run/dc2_pipe p 2> /dev/null
 nanocat --req $dc2address -D hello_dc1 -A -i1 > ./run/dc2_pipe &
 
 echo "Both       DC1        DC2"
-python columnize.py ./run/cluster_pipe ./run/dc1_pipe ./run/dc2_pipe
+python3 columnize.py ./run/cluster_pipe ./run/dc1_pipe ./run/dc2_pipe
