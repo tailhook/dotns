@@ -1,0 +1,11 @@
+digraph topology {
+
+    subgraph cluster_worker {
+        worker1
+        worker2
+        ip="127.0.0.1"
+    }
+
+    client -> worker1
+	client -> worker2 [priority=2]
+}
