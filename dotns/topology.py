@@ -5,6 +5,16 @@ def first(iterable):
     return next(iter(iterable))
 
 
+classification = {
+    'NN_REQ': 'source',
+    'NN_REP': 'sink',
+    'NN_PUSH': 'source',
+    'NN_PULL': 'sink',
+    'NN_PUB': 'source',
+    'NN_SUB': 'sink',
+    }
+
+
 class Topology(object):
 
     def __init__(self, graph):
@@ -13,18 +23,28 @@ class Topology(object):
             for gr in graph.all_subgraphs
             if 'ip' in gr.prop}
         self.processes = {node.name: node for node in graph.all_nodes}
-        self.addresses = defaultdict(list)
+        self.source_addresses = defaultdict(list)
+        self.sink_addresses = defaultdict(list)
         self._minport = defaultdict(lambda: 10000)
-        self._app_to_ip = {}
+        self._traverse_hosts()
         self._prepare_addresses()
-        import pprint; pprint.pprint(self.addresses)
 
-    def _alloc_bind(self, app):
-        ip = self._app_to_ip[app]
+    def print_addresses(self):
+        for k, lst in self.source_addresses.items():
+            print('SOURCE', *k)
+            for a in lst:
+                print('   ', a)
+        for k, lst in self.sink_addresses.items():
+            print('SINK', *k)
+            for a in lst:
+                print('   ', a)
+
+
+    def _alloc_bind(self, host):
+        ip = self._host_to_ip[host]
         port = self._minport[ip]
         self._minport[ip] += 1
-        addr = 'bind:tcp://{}:{}'.format(ip, port)
-        self.addresses[app].append(addr)
+        addr = 'tcp://{}:{}'.format(ip, port)
         return addr
 
     def _connect_to(self, app):
@@ -33,9 +53,22 @@ class Topology(object):
                 return 'connect:' + a[len('bind:'):]
         raise AssertionError("Can't find an address")
 
+    def _traverse_hosts(self):
+        self._host_to_ip = host_to_ip = {}
+        self._node_to_pair = nodepairs = {}
+        for gr in self.graph.all_subgraphs:
+            if not gr.name.startswith('cluster_') or 'ip' not in gr.prop:
+                continue
+            host = gr.name[len('cluster_'):]
+            host_to_ip[host] = gr.prop['ip']
+            for node in gr.nodes.values():
+                nodepairs[node.name] = (host, node.appname)
+
     def _prepare_addresses(self):
         from_mapping = defaultdict(set)
         to_mapping = defaultdict(set)
+        all_connections = defaultdict(
+            lambda: (defaultdict(set), defaultdict(set)))
         for edge in self.graph.all_edges:
             es = edge.start
             ee = edge.end
@@ -43,51 +76,41 @@ class Topology(object):
                 es = es[:es.index(':')]
             if ':' in ee:
                 ee = ee[:ee.index(':')]
-            from_mapping[es].add(ee)
-            to_mapping[ee].add(es)
+            pri = all_connections[int(edge.prop.get('priority', 1))]
+            pri[0][es].add(ee)
+            pri[1][ee].add(es)
 
-        self._app_to_ip = app_to_ip = {}
-        for gr in self.graph.all_subgraphs:
-            grname = gr.name[len('cluster_'):]
-            if 'ip' not in gr.prop:
-                continue
-            ip = gr.prop['ip']
-            for node in gr.nodes.values():
-                app_to_ip[node.name] = ip
+        for priority, (from_mapping, to_mapping) in all_connections.items():
+            for source, sinks in from_mapping.items():
+                if source == 'client':  # client never bind
+                    for sink in sinks:
+                        shost, sapp = self._node_to_pair[sink]
+                        addr = self._alloc_bind(shost)
+                        # Only source addresses have (useful meaning of) priority
+                        caddr = 'connect:{}:{}'.format(priority, addr)
+                        baddr = 'bind:1:{}'.format(addr)
+                        self.source_addresses[None, 'client'].append(caddr)
+                        self.sink_addresses[shost, sapp].append(baddr)
+                else:  # but sources are usually bound (except client)
+                    shost, sapp = self._node_to_pair[source]
+                    addr = self._alloc_bind(shost)
+                    # Only source addresses have (useful meaning of) priority
+                    baddr = 'bind:{}:{}'.format(priority, addr)
+                    caddr = 'connect:1:{}'.format(addr)
+                    self.source_addresses[shost, sapp].append(baddr)
+                    for sink in sinks:
+                        pair = self._node_to_pair[sink]
+                        self.sink_addresses[pair].append(caddr)
 
-        for app, targets in from_mapping.items():
-            if app == 'client':  # special app, never binds
-                for tgt in targets:
-                    self._alloc_bind(tgt)
-                    self.addresses[app].append(self._connect_to(tgt))
-                continue
-            if len(targets) == 1:  # we have one connection
-                tgt = first(targets)
-                if len(to_mapping[tgt]) > 1:  #one to many
-                    if tgt not in self.addresses:
-                        self._alloc_bind(tgt)
-                    self.addresses[app].append(self._connect_to(tgt))
-                else:  # one to one
-                    self._alloc_bind(app)
-                    self.addresses[tgt].append(self._connect_to(app))
-            elif len(targets) > 1:  # we have many connections
-                if any(len(to_mapping[tgt]) > 1 for tgt in targets):
-                    # many to many
-                    if app in to_mapping:  # we are device
-                        self._alloc_bind(app)
-                        for tgt in targets:
-                            self.addresses[tgt].append(self._connect_to(app))
-                    else:
-                        raise NotImplementedError(app)
-                else:
-                    self._alloc_bind(app)
-                    for tgt in targets:
-                        self.addresses[tgt].append(self._connect_to(app))
 
-    def resolve(self, hostname, appname):
-        if hostname not in self.hosts:
-            return self.addresses['client']   # everything unknown are clients
-        return self.addresses[appname]
+    def resolve(self, hostname, appname, socktype):
+        if classification[socktype] == 'source':
+            if hostname not in self.hosts:
+                # everything unknown are clients
+                return self.source_addresses[None, 'client']
+            return self.source_addresses[hostname, appname]
+        else:
+            return self.sink_addresses[hostname, appname]
 
     @property
     def pairs(self):
@@ -96,4 +119,4 @@ class Topology(object):
             if 'ip' not in gr.prop:
                 continue
             for node in gr.nodes.values():
-                yield grname, node.name
+                yield grname, node.appname

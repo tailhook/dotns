@@ -25,6 +25,12 @@ class Node(object):
         self.name = name
         self.prop = {}
 
+    @property
+    def appname(self):
+        return (self.prop.get('appname')
+            or self.prop.get('label')
+            or self.name)
+
 
 class Edge(object):
 
